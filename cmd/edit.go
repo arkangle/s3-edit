@@ -13,7 +13,7 @@ import (
 var editCmd = &cobra.Command{
 	Use:   "edit [S3 file path] (Kms-ID)",
 	Short: "Edit directly a file on S3",
-	Long:  "Edit directly a file on S3",
+	Long:  "Edit directly a file on S3.\nIt attempts to handle kms encryption/decryption to file.\nDepends on previous encryption state and/or if Kms-ID is provided.\nIf Kms-ID is 'nil', then it will force no encryption on uploaded file.",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		path, err := s3.ParsePath(args[0])
