@@ -11,10 +11,10 @@ import (
 )
 
 var editCmd = &cobra.Command{
-	Use:   "edit [S3 file path]",
+	Use:   "edit [S3 file path] (Kms-ID)",
 	Short: "Edit directly a file on S3",
 	Long:  "Edit directly a file on S3",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		path, err := s3.ParsePath(args[0])
 		if err != nil {
@@ -27,8 +27,11 @@ var editCmd = &cobra.Command{
 			fmt.Println(err)
 			os.Exit(1)
 		}
-
-		cli.Edit(path, params)
+		kmsID := ""
+		if len(args) == 2 {
+			kmsID = args[1]
+		}
+		cli.Edit(path, params, kmsID)
 	},
 }
 

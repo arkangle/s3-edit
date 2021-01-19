@@ -7,23 +7,43 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/aws/aws-sdk-go/service/kms"
 	"github.com/aws/aws-sdk-go/service/s3"
+	myKMS "github.com/tsub/s3-edit/cli/kms"
 	myS3 "github.com/tsub/s3-edit/cli/s3"
 	"github.com/tsub/s3-edit/config"
 )
 
 // Edit directly a file on S3
-func Edit(path myS3.Path, params *config.AWSParams) {
-	svc := s3.New(params.Session)
+func Edit(path myS3.Path, params *config.AWSParams, kmsID string) {
+	svcS3 := s3.New(params.Session)
+	svcKMS := kms.New(params.Session)
 
-	object := myS3.GetObject(svc, path)
-
-	tempDirPath, tempfilePath := createTempfile(path, object.Body)
+	object := myS3.GetObject(svcS3, path)
+	data := object.Body
+	if kmsID != "" {
+		decrypted, err := myKMS.DecryptBytes(svcKMS, data)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		data = decrypted
+	}
+	tempDirPath, tempfilePath := createTempfile(path, data)
 	defer os.RemoveAll(tempDirPath)
 
 	editedBody := editFile(tempfilePath)
-	object.Body = []byte(editedBody)
-	myS3.PutObject(svc, path, object)
+	if kmsID != "" {
+		encrypted, err := myKMS.EncryptBytes(svcKMS, []byte(editedBody), kmsID)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		object.Body = encrypted
+	} else {
+		object.Body = []byte(editedBody)
+	}
+	myS3.PutObject(svcS3, path, object)
 }
 
 func createTempfile(path myS3.Path, body []byte) (tempDirPath string, tempfilePath string) {
