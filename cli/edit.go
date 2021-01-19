@@ -20,30 +20,37 @@ func Edit(path myS3.Path, params *config.AWSParams, kmsID string) {
 	svcKMS := kms.New(params.Session)
 
 	object := myS3.GetObject(svcS3, path)
-	data := object.Body
-	if kmsID != "" {
-		decrypted, err := myKMS.DecryptBytes(svcKMS, data)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-		data = decrypted
-	}
+	data := decryptIfKMS(svcKMS, object.Body, kmsID)
 	tempDirPath, tempfilePath := createTempfile(path, data)
 	defer os.RemoveAll(tempDirPath)
 
 	editedBody := editFile(tempfilePath)
+	object.Body = encryptIfKMS(svcKMS, []byte(editedBody), kmsID)
+	myS3.PutObject(svcS3, path, object)
+}
+
+func decryptIfKMS(svc *kms.KMS, data []byte, kmsID string) []byte {
 	if kmsID != "" {
-		encrypted, err := myKMS.EncryptBytes(svcKMS, []byte(editedBody), kmsID)
+		decrypted, err := myKMS.DecryptBytes(svc, data)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
-		object.Body = encrypted
-	} else {
-		object.Body = []byte(editedBody)
+		return decrypted
 	}
-	myS3.PutObject(svcS3, path, object)
+	return data
+}
+
+func encryptIfKMS(svc *kms.KMS, data []byte, kmsID string) []byte {
+	if kmsID != "" {
+		encrypted, err := myKMS.EncryptBytes(svc, data, kmsID)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		return encrypted
+	}
+	return data
 }
 
 func createTempfile(path myS3.Path, body []byte) (tempDirPath string, tempfilePath string) {
